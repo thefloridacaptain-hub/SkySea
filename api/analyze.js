@@ -1,14 +1,30 @@
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
 export default async function handler(req, res) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  // CORS headers so browser can reach this endpoint
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Check API key is present
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY environment variable is not set in Vercel.' });
   }
 
   const { imageBase64, mimeType, weatherData } = req.body;
 
-  if (!imageBase64 || !weatherData) {
-    return res.status(400).json({ error: 'Missing imageBase64 or weatherData' });
-  }
+  if (!imageBase64) return res.status(400).json({ error: 'Missing imageBase64 in request body.' });
+  if (!weatherData) return res.status(400).json({ error: 'Missing weatherData in request body.' });
 
   const prompt = `You are a marine weather assistant. The user has uploaded a photo taken from their boat. Analyze the sky, clouds, horizon visibility, and light conditions visible in the photo. Also consider this current weather data for their location:
 
@@ -26,7 +42,7 @@ Always end with: "This is an AI situational awareness tool. Always verify with N
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
@@ -49,17 +65,26 @@ Always end with: "This is an AI situational awareness tool. Always verify with N
       })
     });
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ error: err.error?.message || 'Anthropic API error' });
+      let errMsg = `Anthropic API returned status ${response.status}`;
+      try {
+        const errJson = JSON.parse(responseText);
+        errMsg = errJson.error?.message || errMsg;
+      } catch {}
+      return res.status(response.status).json({ error: errMsg });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(responseText);
     const text = data.content?.map(c => c.text || '').join('\n').trim();
+
+    if (!text) return res.status(500).json({ error: 'Claude returned an empty response.' });
+
     return res.status(200).json({ result: text });
 
   } catch (err) {
     console.error('analyze error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Server error: ${err.message}` });
   }
 }
