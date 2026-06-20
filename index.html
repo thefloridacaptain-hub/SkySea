@@ -574,20 +574,37 @@ async function handleImage(evt) {
   const file = evt.target.files?.[0];
   if (!file) return;
 
-  const b64 = await new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload  = () => res(r.result.split(',')[1]);
-    r.onerror = () => rej(new Error('Read failed'));
-    r.readAsDataURL(file);
-  });
-
   const imgUrl = URL.createObjectURL(file);
   showAnalysisLoading(imgUrl);
   navigate('analysis');
 
+  // Compress image to stay under Vercel's body size limit
+  const { b64, mimeType } = await compressImage(file);
+
   const weatherData = await fetchWeatherForAnalysis();
-  await runAnalysis(b64, file.type, weatherData, imgUrl);
+  await runAnalysis(b64, mimeType, weatherData, imgUrl);
   evt.target.value = '';
+}
+
+// Resize + compress to max 1024px wide, JPEG quality 0.82
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1024;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      resolve({ b64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = url;
+  });
 }
 
 // ── LOADING UI ──
