@@ -14,9 +14,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is not set in Vercel.' });
+    return res.status(500).json({ error: 'OPENROUTER_API_KEY environment variable is not set in Vercel.' });
   }
 
   const { imageBase64, mimeType, weatherData } = req.body;
@@ -36,35 +36,41 @@ Return a concise boater weather briefing with:
 Always end with: "This is an AI situational awareness tool. Always verify with NOAA marine forecasts and VHF weather radio before departing."`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://skysea.vercel.app',
+        'X-Title': 'SkySea'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-flash-1.5',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: [
               {
-                inline_data: {
-                  mime_type: mimeType || 'image/jpeg',
-                  data: imageBase64
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`
                 }
               },
-              { text: prompt }
+              {
+                type: 'text',
+                text: prompt
+              }
             ]
-          }],
-          generationConfig: {
-            maxOutputTokens: 1000,
-            temperature: 0.4
           }
-        })
-      }
-    );
+        ]
+      })
+    });
 
     const responseText = await response.text();
 
     if (!response.ok) {
-      let errMsg = `Gemini API returned status ${response.status}`;
+      let errMsg = `OpenRouter API returned status ${response.status}`;
       try {
         const errJson = JSON.parse(responseText);
         errMsg = errJson.error?.message || errMsg;
@@ -73,9 +79,9 @@ Always end with: "This is an AI situational awareness tool. Always verify with N
     }
 
     const data = JSON.parse(responseText);
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const text = data.choices?.[0]?.message?.content?.trim();
 
-    if (!text) return res.status(500).json({ error: 'Gemini returned an empty response.' });
+    if (!text) return res.status(500).json({ error: 'OpenRouter returned an empty response.' });
 
     return res.status(200).json({ result: text });
 
