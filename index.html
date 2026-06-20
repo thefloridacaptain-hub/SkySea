@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0A1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SkySea">
+<meta name="description" content="AI-powered sky and weather reader for boaters">
+<title>SkySea — Read the Sky. Know the Water.</title>
+<style>
+  :root {
+    --navy:       #0A1628;
+    --navy-mid:   #112040;
+    --navy-card:  #162950;
+    --navy-light: #1E3A6E;
+    --teal:       #1AB8A0;
+    --teal-dim:   #128A78;
+    --white:      #FFFFFF;
+    --white-70:   rgba(255,255,255,0.7);
+    --white-40:   rgba(255,255,255,0.4);
+    --white-15:   rgba(255,255,255,0.08);
+    --go:         #22C55E;
+    --go-bg:      rgba(34,197,94,0.15);
+    --caution:    #F59E0B;
+    --caution-bg: rgba(245,158,11,0.15);
+    --danger:     #EF4444;
+    --danger-bg:  rgba(239,68,68,0.15);
+    --radius:     16px;
+    --radius-sm:  10px;
+    --sans:       'Inter', system-ui, -apple-system, sans-serif;
+    --mono:       'SF Mono', 'Fira Code', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; width: 100%; overflow: hidden;
+    background: var(--navy); color: var(--white);
+    font-family: var(--sans); font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+  input[type="file"] { display: none; }
+
+  #app {
+    display: flex; flex-direction: column;
+    height: 100dvh; max-width: 430px; margin: 0 auto;
+    position: relative; overflow: hidden;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden;
+    opacity: 0; pointer-events: none;
+    transform: translateX(30px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+  }
+  .screen.active { opacity: 1; pointer-events: all; transform: translateX(0); }
+
+  nav {
+    position: relative; z-index: 100;
+    background: rgba(10,22,40,0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--white-15);
+    display: flex; align-items: stretch;
+    padding: 0 8px env(safe-area-inset-bottom, 8px);
+    flex-shrink: 0;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px; padding: 10px 4px;
+    color: var(--white-40); transition: color 0.2s;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .nav-btn svg { width: 22px; height: 22px; }
+  .nav-btn.active { color: var(--teal); }
+  .nav-btn.active svg { filter: drop-shadow(0 0 6px rgba(26,184,160,0.6)); }
+
+  .screen-header {
+    padding: 52px 20px 16px;
+    background: linear-gradient(180deg, var(--navy-mid) 0%, var(--navy) 100%);
+    flex-shrink: 0;
+  }
+  .screen-header h1 {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--teal); margin-bottom: 2px;
+  }
+  .screen-header h2 { font-size: 22px; font-weight: 700; }
+
+  /* HOME */
+  #home { background: radial-gradient(ellipse 80% 60% at 50% 20%, #0E2A52 0%, var(--navy) 70%); }
+  .home-top {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 24px 0; position: relative;
+  }
+  .horizon-wave { position: absolute; bottom: 0; left: 0; right: 0; height: 120px; overflow: hidden; pointer-events: none; }
+  .horizon-wave svg { width: 100%; height: 100%; }
+
+  .app-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .logo-mark {
+    width: 48px; height: 48px; background: var(--teal); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 24px rgba(26,184,160,0.5);
+  }
+  .logo-mark svg { width: 28px; height: 28px; color: var(--navy); }
+  .app-name {
+    font-size: 36px; font-weight: 800; letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #fff 30%, var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .tagline {
+    font-size: 15px; color: var(--white-70); letter-spacing: 0.04em;
+    text-align: center; margin-bottom: 40px; font-style: italic;
+  }
+
+  .gps-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--white-15); border: 1px solid var(--white-15);
+    border-radius: 100px; padding: 6px 14px;
+    font-size: 11px; font-weight: 600; color: var(--white-70);
+    letter-spacing: 0.06em; margin-bottom: 40px; font-family: var(--mono);
+  }
+  .gps-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal); box-shadow: 0 0 8px var(--teal);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .cam-btn-wrap {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 32px;
+  }
+  .cam-ring {
+    position: absolute; width: 150px; height: 150px; border-radius: 50%;
+    border: 2px solid var(--teal-dim); animation: spin-ring 12s linear infinite; opacity: 0.4;
+  }
+  .cam-ring-2 {
+    width: 170px; height: 170px; border-style: dashed; border-width: 1px;
+    border-color: var(--teal-dim); animation-duration: 20s; animation-direction: reverse;
+  }
+  @keyframes spin-ring { to { transform: rotate(360deg); } }
+  .cam-btn {
+    width: 120px; height: 120px; border-radius: 50%;
+    background: linear-gradient(145deg, var(--teal) 0%, var(--teal-dim) 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; box-shadow: 0 0 40px rgba(26,184,160,0.45), 0 8px 24px rgba(0,0,0,0.4);
+    transition: transform 0.15s, box-shadow 0.15s; position: relative; z-index: 1;
+  }
+  .cam-btn:active { transform: scale(0.95); box-shadow: 0 0 20px rgba(26,184,160,0.3), 0 4px 12px rgba(0,0,0,0.4); }
+  .cam-btn svg { width: 38px; height: 38px; color: var(--navy); }
+  .cam-btn span { font-size: 11px; font-weight: 800; color: var(--navy); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .reads-counter { font-size: 12px; color: var(--white-40); text-align: center; font-weight: 500; }
+  .reads-counter strong { color: var(--teal); }
+
+  .home-info {
+    padding: 16px 20px 12px; display: flex; justify-content: space-between;
+    border-top: 1px solid var(--white-15); flex-shrink: 0;
+  }
+  .info-item { text-align: center; }
+  .info-label { font-size: 10px; color: var(--white-40); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 2px; }
+  .info-val { font-size: 13px; font-weight: 700; font-family: var(--mono); color: var(--white-70); }
+
+  /* ANALYSIS */
+  .analysis-photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; flex-shrink: 0; background: var(--navy-mid); display: block; }
+  .analysis-photo-placeholder {
+    width: 100%; aspect-ratio: 4/3; background: var(--navy-mid);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .analysis-body { padding: 20px; flex: 1; }
+
+  .loading-card {
+    background: var(--navy-card); border-radius: var(--radius);
+    padding: 28px 20px; text-align: center; border: 1px solid var(--white-15);
+  }
+  .wave-loader { display: flex; justify-content: center; gap: 5px; margin-bottom: 16px; }
+  .wave-bar { width: 4px; border-radius: 4px; background: var(--teal); animation: wave-bounce 1.2s ease-in-out infinite; }
+  .wave-bar:nth-child(1) { height: 20px; animation-delay: 0s; }
+  .wave-bar:nth-child(2) { height: 30px; animation-delay: 0.1s; }
+  .wave-bar:nth-child(3) { height: 24px; animation-delay: 0.2s; }
+  .wave-bar:nth-child(4) { height: 36px; animation-delay: 0.3s; }
+  .wave-bar:nth-child(5) { height: 28px; animation-delay: 0.4s; }
+  .wave-bar:nth-child(6) { height: 18px; animation-delay: 0.5s; }
+  @keyframes wave-bounce {
+    0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+  .loading-text { font-size: 14px; color: var(--white-70); line-height: 1.5; }
+  .loading-sub { font-size: 12px; color: var(--white-40); margin-top: 6px; }
+
+  .status-badge {
+    width: 100%; padding: 18px 24px; border-radius: var(--radius); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 16px; border: 1px solid;
+  }
+  .status-badge.go      { background: var(--go-bg);      border-color: rgba(34,197,94,0.3);   }
+  .status-badge.caution { background: var(--caution-bg); border-color: rgba(245,158,11,0.3);  }
+  .status-badge.danger  { background: var(--danger-bg);  border-color: rgba(239,68,68,0.3);   }
+  .badge-light { width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 18px currentColor; }
+  .go .badge-light      { background: var(--go);      color: var(--go);      }
+  .caution .badge-light { background: var(--caution); color: var(--caution); }
+  .danger .badge-light  { background: var(--danger);  color: var(--danger);  }
+  .badge-label { font-size: 28px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; }
+  .go .badge-label      { color: var(--go);      }
+  .caution .badge-label { color: var(--caution); }
+  .danger .badge-label  { color: var(--danger);  }
+
+  .result-card {
+    background: var(--navy-card); border-radius: var(--radius);
+    padding: 20px; border: 1px solid var(--white-15); margin-bottom: 14px;
+  }
+  .result-card h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--teal); margin-bottom: 10px; font-weight: 700;
+  }
+  .result-card p { font-size: 15px; line-height: 1.65; color: var(--white-70); }
+  .disclaimer-box {
+    background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+    border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 20px;
+    font-size: 12px; color: rgba(245,158,11,0.9); line-height: 1.55; font-weight: 500;
+  }
+  .new-read-btn {
+    width: 100%; padding: 16px; border-radius: var(--radius);
+    background: var(--teal); color: var(--navy);
+    font-size: 15px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+    box-shadow: 0 4px 20px rgba(26,184,160,0.3); transition: transform 0.15s; margin-bottom: 20px;
+  }
+  .new-read-btn:active { transform: scale(0.98); }
+
+  /* HISTORY */
+  .history-list { padding: 12px 20px 20px; flex: 1; }
+  .history-item {
+    background: var(--navy-card); border-radius: var(--radius);
+    padding: 14px; display: flex; align-items: center; gap: 14px;
+    margin-bottom: 10px; border: 1px solid var(--white-15);
+  }
+  .history-thumb {
+    width: 60px; height: 60px; border-radius: var(--radius-sm);
+    object-fit: cover; flex-shrink: 0; background: var(--navy-light);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .history-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .history-info { flex: 1; min-width: 0; }
+  .history-time { font-size: 11px; color: var(--white-40); margin-bottom: 3px; font-family: var(--mono); }
+  .history-loc { font-size: 11px; color: var(--teal); margin-bottom: 5px; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-snippet { font-size: 12px; color: var(--white-70); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-badge {
+    flex-shrink: 0; padding: 5px 10px; border-radius: 100px;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .hb-go      { background: var(--go-bg);      color: var(--go);      border: 1px solid rgba(34,197,94,0.3);  }
+  .hb-caution { background: var(--caution-bg); color: var(--caution); border: 1px solid rgba(245,158,11,0.3); }
+  .hb-danger  { background: var(--danger-bg);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3);  }
+  .empty-history {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px; text-align: center; color: var(--white-40);
+  }
+  .empty-history svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-history p { font-size: 15px; line-height: 1.6; }
+
+  /* ABOUT */
+  .about-body { padding: 12px 20px 24px; flex: 1; }
+  .about-card {
+    background: var(--navy-card); border-radius: var(--radius);
+    padding: 20px; border: 1px solid var(--white-15); margin-bottom: 14px;
+  }
+  .about-card h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--teal); margin-bottom: 12px; font-weight: 700;
+  }
+  .about-card p { font-size: 14px; color: var(--white-70); line-height: 1.65; }
+  .about-card p + p { margin-top: 10px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--white-15); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 13px; color: var(--white-70); }
+  .stat-val { font-size: 13px; font-weight: 700; color: var(--white); font-family: var(--mono); }
+  .noaa-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 15px; border-radius: var(--radius);
+    background: var(--navy-light); border: 1px solid var(--white-15);
+    font-size: 14px; font-weight: 700; color: var(--white); text-decoration: none;
+    margin-bottom: 14px; transition: background 0.15s;
+  }
+  .noaa-btn:active { background: var(--navy-card); }
+  .pro-card {
+    background: linear-gradient(135deg, #1E3A6E, #112040);
+    border-radius: var(--radius); padding: 20px;
+    border: 1px solid rgba(26,184,160,0.3); margin-bottom: 14px; text-align: center;
+  }
+  .pro-badge {
+    display: inline-block; background: var(--teal); color: var(--navy);
+    font-size: 10px; font-weight: 900; letter-spacing: 0.1em;
+    padding: 3px 10px; border-radius: 100px; margin-bottom: 10px; text-transform: uppercase;
+  }
+  .pro-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+  .pro-card p { font-size: 13px; color: var(--white-70); margin-bottom: 16px; line-height: 1.5; }
+  .pro-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius-sm);
+    background: var(--teal); color: var(--navy);
+    font-size: 14px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; transition: transform 0.15s;
+  }
+  .pro-btn:active { transform: scale(0.98); }
+
+  /* CHIPS */
+  .weather-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip {
+    background: var(--navy-light); border-radius: 100px;
+    padding: 5px 12px; font-size: 11px; font-weight: 700;
+    color: var(--white-70); font-family: var(--mono);
+    border: 1px solid var(--white-15); display: flex; align-items: center; gap: 5px;
+  }
+  .chip-icon { font-size: 13px; }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--navy-mid); border-radius: 20px 20px 0 0;
+    padding: 28px 24px 40px; max-width: 430px; width: 100%;
+    border: 1px solid var(--white-15); border-bottom: none;
+    transform: translateY(100%); transition: transform 0.3s ease;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-handle { width: 40px; height: 4px; background: var(--white-15); border-radius: 4px; margin: 0 auto 24px; }
+  .modal h2 { font-size: 20px; font-weight: 800; margin-bottom: 10px; text-align: center; }
+  .modal p { font-size: 14px; color: var(--white-70); line-height: 1.65; text-align: center; margin-bottom: 20px; }
+  .modal-close {
+    width: 100%; padding: 15px; border-radius: var(--radius);
+    background: var(--white-15); font-size: 15px; font-weight: 700; transition: background 0.15s;
+  }
+  .modal-close:active { background: var(--white-40); }
+
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--white-15); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <div class="screen active" id="home">
+    <div class="home-top">
+      <div class="app-logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/>
+          </svg>
+        </div>
+        <span class="app-name">SkySea</span>
+      </div>
+      <p class="tagline">Read the sky. Know the water.</p>
+
+      <div class="gps-pill" id="gps-pill">
+        <span class="gps-dot"></span>
+        <span id="gps-text">Locating…</span>
+      </div>
+
+      <div class="cam-btn-wrap">
+        <div class="cam-ring"></div>
+        <div class="cam-ring cam-ring-2"></div>
+        <button class="cam-btn" id="cam-btn" onclick="triggerCapture()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span>Read Sky</span>
+        </button>
+      </div>
+      <p class="reads-counter" id="reads-counter">Loading…</p>
+
+      <div class="horizon-wave">
+        <svg viewBox="0 0 430 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,60 C80,30 160,90 280,55 C360,30 400,70 430,50 L430,120 L0,120 Z" fill="rgba(26,184,160,0.06)"/>
+          <path d="M0,80 C100,55 200,100 310,70 C380,50 410,85 430,72 L430,120 L0,120 Z" fill="rgba(26,184,160,0.04)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="home-info">
+      <div class="info-item"><div class="info-label">Wind</div><div class="info-val" id="hw-wind">—</div></div>
+      <div class="info-item"><div class="info-label">Visibility</div><div class="info-val" id="hw-vis">—</div></div>
+      <div class="info-item"><div class="info-label">Conditions</div><div class="info-val" id="hw-cond">—</div></div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS -->
+  <div class="screen" id="analysis">
+    <img class="analysis-photo" id="analysis-img" src="" alt="Sky photo" style="display:none">
+    <div class="analysis-photo-placeholder" id="analysis-placeholder">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="m21 15-5-5L5 21"/>
+      </svg>
+    </div>
+    <div class="analysis-body" id="analysis-body"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="screen" id="history">
+    <div class="screen-header">
+      <h1>SkySea</h1><h2>Sky Read History</h2>
+    </div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <!-- ABOUT -->
+  <div class="screen" id="about">
+    <div class="screen-header">
+      <h1>SkySea</h1><h2>About</h2>
+    </div>
+    <div class="about-body">
+      <div class="about-card">
+        <h3>What is SkySea?</h3>
+        <p>SkySea uses AI vision to analyze cloud patterns, horizon visibility, and light conditions from a photo you take on the water. It cross-references your sky read with live marine weather data to give you a plain-English boating briefing.</p>
+        <p>Tap the camera button on the home screen to take a photo or upload an image of the sky from your vessel.</p>
+      </div>
+      <div class="about-card">
+        <h3>Cost &amp; Usage</h3>
+        <div class="stat-row"><span class="stat-label">Estimated cost per sky read</span><span class="stat-val">~$0.003</span></div>
+        <div class="stat-row"><span class="stat-label">OpenWeatherMap calls/day (free tier)</span><span class="stat-val">1,000</span></div>
+        <div class="stat-row"><span class="stat-label">Free sky reads per day</span><span class="stat-val">5</span></div>
+        <div class="stat-row"><span class="stat-label">AI model</span><span class="stat-val">claude-sonnet-4-6</span></div>
+      </div>
+      <div class="pro-card">
+        <div class="pro-badge">PRO</div>
+        <h3>Unlimited Sky Reads</h3>
+        <p>Remove the daily limit and unlock priority analysis with Pro membership.</p>
+        <button class="pro-btn" onclick="openProModal()">Upgrade to Pro — $4.99/mo</button>
+      </div>
+      <a class="noaa-btn" href="https://tidesandcurrents.noaa.gov" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        NOAA Marine Forecasts &amp; Tides
+      </a>
+      <div class="about-card">
+        <h3>Safety Disclaimer</h3>
+        <p>SkySea is an AI situational awareness tool only. <strong>Always verify conditions with official NOAA marine forecasts and VHF weather radio (channels WX1–WX3) before departing.</strong> Never rely solely on this app for navigation or safety decisions.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-target="home" onclick="navigate('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+      Home
+    </button>
+    <button class="nav-btn" data-target="analysis" onclick="navigate('analysis')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
+      Reading
+    </button>
+    <button class="nav-btn" data-target="history" onclick="navigate('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+      History
+    </button>
+    <button class="nav-btn" data-target="about" onclick="navigate('about')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      About
+    </button>
+  </nav>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="pro-modal" onclick="closeModal('pro-modal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h2>🌊 SkySea Pro</h2>
+      <p>Unlimited sky reads, priority AI analysis, and advanced weather overlays. Coming soon to the App Store and Google Play.</p>
+      <button class="modal-close" onclick="closeModal('pro-modal')">Got it — notify me when ready</button>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleImage(event)">
+</div>
+
+<script>
+// ── No API keys here — they live securely on the server ──
+const FREE_READS_PER_DAY = 5;
+const MAX_HISTORY        = 10;
+
+let currentLat  = null;
+let currentLon  = null;
+
+// ── NAVIGATION ──
+function navigate(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(screen).classList.add('active');
+  document.querySelector(`.nav-btn[data-target="${screen}"]`)?.classList.add('active');
+  if (screen === 'history') renderHistory();
+}
+
+// ── GPS ──
+function initGPS() {
+  if (!navigator.geolocation) {
+    document.getElementById('gps-text').textContent = 'GPS unavailable';
+    return;
+  }
+  navigator.geolocation.watchPosition(pos => {
+    currentLat = pos.coords.latitude;
+    currentLon = pos.coords.longitude;
+    const ns = currentLat >= 0 ? 'N' : 'S';
+    const ew = currentLon >= 0 ? 'E' : 'W';
+    document.getElementById('gps-text').textContent =
+      `${Math.abs(currentLat).toFixed(4)}°${ns}  ${Math.abs(currentLon).toFixed(4)}°${ew}`;
+    fetchWeatherBackground();
+  }, () => {
+    document.getElementById('gps-text').textContent = 'No GPS signal';
+  }, { enableHighAccuracy: true, maximumAge: 30000 });
+}
+
+// ── WEATHER (calls our secure server endpoint) ──
+async function fetchWeatherBackground() {
+  if (!currentLat) return;
+  try {
+    const r = await fetch(`/api/weather?lat=${currentLat}&lon=${currentLon}`);
+    const d = await r.json();
+    if (d.raw) {
+      document.getElementById('hw-wind').textContent  = `${d.raw.windKts} kts`;
+      document.getElementById('hw-vis').textContent   = `${d.raw.visKm} km`;
+      document.getElementById('hw-cond').textContent  = (d.raw.condition || '—').slice(0, 8);
+    }
+  } catch(e) { console.warn('Weather fetch failed', e); }
+}
+
+async function fetchWeatherForAnalysis() {
+  if (!currentLat) return 'Weather data unavailable — GPS not locked.';
+  try {
+    const r = await fetch(`/api/weather?lat=${currentLat}&lon=${currentLon}`);
+    const d = await r.json();
+    return d.summary || 'Weather data unavailable.';
+  } catch(e) {
+    return 'Could not fetch weather data.';
+  }
+}
+
+// ── READ LIMITS ──
+function getTodayKey() { return 'skysea_reads_' + new Date().toISOString().slice(0, 10); }
+function getReadsToday() { return parseInt(localStorage.getItem(getTodayKey()) || '0', 10); }
+function incrementReads() { localStorage.setItem(getTodayKey(), (getReadsToday() + 1).toString()); }
+function isPro() { return localStorage.getItem('skysea_pro') === 'true'; }
+
+function updateReadsCounter() {
+  const el   = document.getElementById('reads-counter');
+  const left = Math.max(0, FREE_READS_PER_DAY - getReadsToday());
+  if (isPro()) {
+    el.innerHTML = '<strong style="color:var(--teal)">PRO</strong> — Unlimited reads';
+  } else {
+    el.innerHTML = `<strong>${left}</strong> of ${FREE_READS_PER_DAY} free reads remaining today`;
+  }
+}
+
+// ── CAMERA ──
+function triggerCapture() {
+  if (!isPro() && getReadsToday() >= FREE_READS_PER_DAY) { openProModal(); return; }
+  document.getElementById('file-input').click();
+}
+
+async function handleImage(evt) {
+  const file = evt.target.files?.[0];
+  if (!file) return;
+
+  const b64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Read failed'));
+    r.readAsDataURL(file);
+  });
+
+  const imgUrl = URL.createObjectURL(file);
+  showAnalysisLoading(imgUrl);
+  navigate('analysis');
+
+  const weatherData = await fetchWeatherForAnalysis();
+  await runAnalysis(b64, file.type, weatherData, imgUrl);
+  evt.target.value = '';
+}
+
+// ── LOADING UI ──
+function showAnalysisLoading(imgUrl) {
+  const img = document.getElementById('analysis-img');
+  const ph  = document.getElementById('analysis-placeholder');
+  if (imgUrl) { img.src = imgUrl; img.style.display = 'block'; ph.style.display = 'none'; }
+  else { img.style.display = 'none'; ph.style.display = 'flex'; }
+  document.getElementById('analysis-body').innerHTML = `
+    <div class="loading-card">
+      <div class="wave-loader">
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      </div>
+      <p class="loading-text">Reading the sky…<br>Checking marine weather for your position</p>
+      <p class="loading-sub">Cross-referencing cloud patterns with live forecast data</p>
+    </div>`;
+}
+
+function showAnalysisError(msg) {
+  document.getElementById('analysis-body').innerHTML = `
+    <div class="loading-card">
+      <p class="loading-text" style="color:var(--danger)">⚠️ Analysis failed</p>
+      <p class="loading-sub" style="margin-top:10px">${msg}</p>
+      <button class="new-read-btn" style="margin-top:20px" onclick="navigate('home')">Try Again</button>
+    </div>`;
+}
+
+// ── CLAUDE ANALYSIS (calls our secure server endpoint) ──
+async function runAnalysis(b64, mimeType, weatherData, imgUrl) {
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: b64, mimeType, weatherData })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (!data.result) throw new Error('Empty response from server');
+    parseAndShowResult(data.result, imgUrl, weatherData);
+  } catch(e) {
+    showAnalysisError(e.message);
+    console.error(e);
+  }
+}
+
+// ── PARSE & RENDER ──
+function parseAndShowResult(text, imgUrl, weatherData) {
+  let status = 'caution';
+  const statusLine = text.match(/STATUS:\s*(GO|PROCEED WITH CAUTION|STAY IN)/i);
+  if (statusLine) {
+    const s = statusLine[1].toUpperCase();
+    if (s === 'GO') status = 'go';
+    else if (s.includes('CAUTION')) status = 'caution';
+    else if (s.includes('STAY')) status = 'danger';
+  }
+
+  const sections = {
+    sky:      extractSection(text, '1', '2'),
+    forecast: extractSection(text, '2', '3'),
+  };
+
+  const disclaimer = 'This is an AI situational awareness tool. Always verify with NOAA marine forecasts and VHF weather radio before departing.';
+  let briefing = text.replace(/STATUS:.*$/im, '').replace(disclaimer, '').trim();
+
+  renderResult(status, sections, briefing, disclaimer, weatherData);
+  saveToHistory(status, briefing, imgUrl);
+  incrementReads();
+  updateReadsCounter();
+}
+
+function extractSection(text, startNum, endNum) {
+  const re = new RegExp(`\\(${startNum}\\)([\\s\\S]*?)(?=\\(${endNum}\\)|STATUS:|$)`, 'i');
+  const m  = text.match(re);
+  return m ? m[1].trim() : '';
+}
+
+function renderResult(status, sections, briefing, disclaimer, weatherData) {
+  const labels = { go: 'GO', caution: 'CAUTION', danger: 'STAY IN' };
+  const chips  = buildWeatherChips(weatherData);
+
+  document.getElementById('analysis-body').innerHTML = `
+    <div class="status-badge ${status}">
+      <div class="badge-light"></div>
+      <span class="badge-label">${labels[status]}</span>
+    </div>
+    ${chips}
+    ${sections.sky ? `<div class="result-card"><h3>Sky Conditions</h3><p>${sections.sky}</p></div>` : ''}
+    ${sections.forecast
+      ? `<div class="result-card"><h3>Next 2–4 Hours</h3><p>${sections.forecast}</p></div>`
+      : (!sections.sky ? `<div class="result-card"><h3>Weather Briefing</h3><p>${briefing}</p></div>` : '')}
+    <div class="disclaimer-box">⚠️ ${disclaimer}</div>
+    <button class="new-read-btn" onclick="navigate('home')">New Sky Read</button>`;
+}
+
+function buildWeatherChips(weatherData) {
+  if (!weatherData || weatherData.includes('unavailable')) return '';
+  const windMatch = weatherData.match(/Wind:\s*([\d.]+)\s*knots/);
+  const visMatch  = weatherData.match(/Visibility:\s*([\d.]+)\s*km/);
+  const condMatch = weatherData.match(/Conditions:\s*(.+)/);
+  let chips = '';
+  if (windMatch) chips += `<div class="chip"><span class="chip-icon">💨</span>${windMatch[1]} kts</div>`;
+  if (visMatch)  chips += `<div class="chip"><span class="chip-icon">👁️</span>${visMatch[1]} km vis</div>`;
+  if (condMatch) chips += `<div class="chip"><span class="chip-icon">🌤</span>${condMatch[1].slice(0, 20)}</div>`;
+  if (currentLat) chips += `<div class="chip"><span class="chip-icon">📍</span>${currentLat.toFixed(3)}°, ${currentLon.toFixed(3)}°</div>`;
+  return chips ? `<div class="weather-chips">${chips}</div>` : '';
+}
+
+// ── HISTORY ──
+function saveToHistory(status, briefing, imgUrl) {
+  const history = getHistory();
+  history.unshift({ id: Date.now(), status, briefing: briefing.slice(0, 120), imgUrl, lat: currentLat, lon: currentLon, time: new Date().toISOString() });
+  if (history.length > MAX_HISTORY) history.pop();
+  localStorage.setItem('skysea_history', JSON.stringify(history));
+}
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('skysea_history') || '[]'); } catch { return []; }
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const el      = document.getElementById('history-list');
+  if (!history.length) {
+    el.innerHTML = `<div class="empty-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><p>No sky reads yet.<br>Head to the home screen and tap <strong style="color:var(--teal)">Read Sky</strong> to get started.</p></div>`;
+    return;
+  }
+  el.innerHTML = history.map(entry => {
+    const d       = new Date(entry.time);
+    const timeStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const locStr  = entry.lat ? `${entry.lat.toFixed(3)}°, ${entry.lon.toFixed(3)}°` : 'Location unknown';
+    const hbClass = entry.status === 'go' ? 'hb-go' : entry.status === 'caution' ? 'hb-caution' : 'hb-danger';
+    const label   = entry.status === 'go' ? 'GO' : entry.status === 'caution' ? 'CAUTION' : 'STAY IN';
+    const snippet = (entry.briefing || '').replace(/\(\d\)/g, '').trim().slice(0, 80);
+    return `<div class="history-item" onclick="showHistoryEntry(${entry.id})">
+      <div class="history-thumb">${entry.imgUrl ? `<img src="${entry.imgUrl}" alt="">` : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`}</div>
+      <div class="history-info"><div class="history-time">${timeStr}</div><div class="history-loc">${locStr}</div><div class="history-snippet">${snippet}…</div></div>
+      <div class="history-badge ${hbClass}">${label}</div>
+    </div>`;
+  }).join('');
+}
+
+function showHistoryEntry(id) {
+  const entry = getHistory().find(e => e.id === id);
+  if (!entry) return;
+  const img = document.getElementById('analysis-img');
+  const ph  = document.getElementById('analysis-placeholder');
+  if (entry.imgUrl) { img.src = entry.imgUrl; img.style.display = 'block'; ph.style.display = 'none'; }
+  else { img.style.display = 'none'; ph.style.display = 'flex'; }
+  const labels    = { go: 'GO', caution: 'CAUTION', danger: 'STAY IN' };
+  const disclaimer = 'This is an AI situational awareness tool. Always verify with NOAA marine forecasts and VHF weather radio before departing.';
+  const d       = new Date(entry.time);
+  const timeStr = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const locStr  = entry.lat ? `${entry.lat.toFixed(4)}°, ${entry.lon.toFixed(4)}°` : 'Location unknown';
+  document.getElementById('analysis-body').innerHTML = `
+    <div style="padding:8px 0 12px;font-size:11px;color:var(--white-40);font-family:var(--mono)">${timeStr} · ${locStr}</div>
+    <div class="status-badge ${entry.status}"><div class="badge-light"></div><span class="badge-label">${labels[entry.status]}</span></div>
+    <div class="result-card"><h3>Weather Briefing</h3><p>${entry.briefing}</p></div>
+    <div class="disclaimer-box">⚠️ ${disclaimer}</div>
+    <button class="new-read-btn" onclick="navigate('home')">New Sky Read</button>`;
+  navigate('analysis');
+}
+
+// ── MODALS ──
+function openProModal() { document.getElementById('pro-modal').classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── INIT ──
+function init() {
+  initGPS();
+  updateReadsCounter();
+  document.getElementById('analysis-body').innerHTML = `
+    <div class="empty-history" style="padding:40px 20px;text-align:center;color:var(--white-40)">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:0.3"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>
+      <p>Take a sky photo on the home screen<br>to get your boater briefing.</p>
+    </div>`;
+}
+
+init();
+</script>
+</body>
+</html>
